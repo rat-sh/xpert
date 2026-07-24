@@ -1,0 +1,104 @@
+'use client';
+import { useEffect, useState } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
+import Link from 'next/link';
+import { ClipboardCheck, FileText, LogOut, Menu, BookOpen, X, UserPlus } from 'lucide-react';
+import { useStudent } from '@/contexts/StudentContext';
+import { ThemeToggle } from '@/app/components/ui/ThemeToggle';
+
+const tabs = [
+  { id: 'dashboard', label: 'Dashboard', icon: BookOpen, href: '/student' },
+  { id: 'exams', label: 'Exams', icon: ClipboardCheck, href: '/student/exams' },
+  { id: 'results', label: 'Results', icon: FileText, href: '/student/results' },
+  { id: 'join', label: 'Join Batch', icon: UserPlus, href: '/student/join' },
+];
+
+export default function StudentLayout({ children }: { children: React.ReactNode }) {
+  const { student, loading, signOut } = useStudent();
+  const router = useRouter();
+  const pathname = usePathname();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  useEffect(() => {
+    if (loading) return;
+    if (!student && pathname !== '/student/join') {
+      router.replace('/student/join');
+    }
+  }, [student, loading, pathname, router]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!student && pathname === '/student/join') {
+    return <>{children}</>;
+  }
+
+  if (!student) return null;
+
+  const handleLogout = () => {
+    signOut();
+    router.push('/student/join');
+  };
+
+  const activeTab = tabs.find((t) => pathname === t.href || (t.href !== '/student' && pathname.startsWith(t.href)));
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex">
+      <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform transition-transform duration-300 flex flex-col ${drawerOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+        <div className="p-4 border-b border-gray-200 flex items-center gap-3">
+          <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center shrink-0">
+            <BookOpen className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h2 className="text-gray-900 font-semibold text-sm">Xpert</h2>
+            <p className="text-gray-500 text-xs">Student Portal</p>
+          </div>
+          <button className="ml-auto lg:hidden" onClick={() => setDrawerOpen(false)}>
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = pathname === tab.href || (tab.href !== '/student' && pathname.startsWith(tab.href));
+            return (
+              <Link key={tab.id} href={tab.href} onClick={() => setDrawerOpen(false)}
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-sm ${isActive ? 'bg-indigo-50 text-indigo-600 font-medium' : 'text-gray-700 hover:bg-gray-50'}`}>
+                <Icon className="w-5 h-5 shrink-0" />
+                {tab.label}
+              </Link>
+            );
+          })}
+        </nav>
+        <div className="p-4 border-t border-gray-200">
+          <p className="text-sm text-gray-900 font-medium px-2">{student.name}</p>
+          <p className="text-xs text-indigo-600 px-2 mb-3 font-mono">{student.student_code}</p>
+          <ThemeToggle />
+          <button onClick={handleLogout} className="mt-1 w-full flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors text-sm">
+            <LogOut className="w-4 h-4" /> Reset Device
+          </button>
+        </div>
+      </aside>
+
+      {drawerOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setDrawerOpen(false)} />}
+
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="bg-white shadow-sm border-b border-gray-200 lg:hidden sticky top-0 z-30">
+          <div className="px-4 py-4 flex items-center justify-between">
+            <button onClick={() => setDrawerOpen(true)} className="p-2 hover:bg-gray-100 rounded-lg"><Menu className="w-6 h-6" /></button>
+            <h1 className="text-gray-900 font-semibold text-sm">{activeTab?.label ?? 'Dashboard'}</h1>
+            <div className="w-10" />
+          </div>
+        </header>
+        <main className="flex-1 overflow-auto">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">{children}</div>
+        </main>
+      </div>
+    </div>
+  );
+}
