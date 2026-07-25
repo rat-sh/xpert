@@ -4,6 +4,10 @@ import './globals.css';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { StudentProvider } from '@/contexts/StudentContext';
 import { Toaster } from 'sonner';
+import { startKeepAlive } from '@/lib/keepAlive';
+
+// Start keep-alive pinger on server boot (prevents Render free-tier sleep)
+startKeepAlive();
 
 const geist = Geist({ subsets: ['latin'] });
 
