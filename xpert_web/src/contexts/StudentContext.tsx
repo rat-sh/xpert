@@ -1,73 +1,46 @@
 'use client';
-import { createContext, useContext, useState, ReactNode, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
-import { getStudentSession, setStudentSession, clearStudentSession, StudentSession } from '@/lib/studentSession';
+
+import { createContext, useCallback, useContext, useMemo } from 'react';
+import { supabase, UserProfile } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface StudentContextType {
-  student: StudentSession | null;
+  student: UserProfile | null;
   loading: boolean;
-  register: (name: string, phone?: string) => Promise<StudentSession | null>;
-  joinBatch: (joinCode: string) => Promise<boolean>;
-  signOut: () => void;
-  refresh: () => void;
+  joinBatch: (joinCode: string) => Promise<{ batchId: string; batchName: string; teacherName: string } | null>;
+  signOut: () => Promise<void>;
+  refresh: () => Promise<void>;
 }
 
 const StudentContext = createContext<StudentContextType>({
   student: null,
   loading: true,
-  register: async () => null,
-  joinBatch: async () => false,
-  signOut: () => {},
-  refresh: () => {},
+  joinBatch: async () => null,
+  signOut: async () => {},
+  refresh: async () => {},
 });
 
-export function StudentProvider({ children }: { children: ReactNode }) {
-  // Lazy initialiser: reads localStorage synchronously on first render — no effect needed.
-  const [student, setStudent] = useState<StudentSession | null>(() => getStudentSession());
-  const [loading] = useState(false);
+export function StudentProvider({ children }: { children: React.ReactNode }) {
+  const { user, profile, loading, signOut } = useAuth();
 
-  // Kept in context API so consumers can call refresh() after an external session change.
-  const refresh = useCallback(() => {
-    setStudent(getStudentSession());
-  }, []);
-
-  const register = async (name: string, phone?: string): Promise<StudentSession | null> => {
-    const { data, error } = await supabase.rpc('register_student', {
-      p_name: name,
-      p_phone: phone ?? null,
-    });
+  const joinBatch = useCallback(async (joinCode: string) => {
+    if (!user || profile?.role !== 'student') return null;
+    const { data, error } = await supabase.rpc('join_batch_by_code', { p_join_code: joinCode.trim() });
     if (error || !data?.[0]) return null;
-    const row = data[0] as { id: string; student_code: string; name: string };
-    const session: StudentSession = { id: row.id, student_code: row.student_code, name: row.name, phone };
-    setStudentSession(session);
-    setStudent(session);
-    return session;
-  };
+    const row = data[0] as { out_batch_id: string; out_batch_name: string; out_teacher_name: string };
+    return { batchId: row.out_batch_id, batchName: row.out_batch_name, teacherName: row.out_teacher_name };
+  }, [profile?.role, user]);
 
-  const joinBatch = async (joinCode: string): Promise<boolean> => {
-    const sess = student ?? getStudentSession();
-    if (!sess) return false;
-    const { error } = await supabase.rpc('join_batch_as_student', {
-      p_join_code: joinCode.trim(),
-      p_student_id: sess.id,
-    });
-    if (error) {
-      console.error('join_batch_as_student failed:', error);
-      return false;
-    }
-    return true;
-  };
+  const value = useMemo(() => ({
+    student: profile?.role === 'student' ? profile : null,
+    loading,
+    joinBatch,
+    signOut,
+    // AuthContext owns the profile lifecycle; callers do not need a second identity cache.
+    refresh: async () => {},
+  }), [joinBatch, loading, profile, signOut]);
 
-  const signOut = () => {
-    clearStudentSession();
-    setStudent(null);
-  };
-
-  return (
-    <StudentContext.Provider value={{ student, loading, register, joinBatch, signOut, refresh }}>
-      {children}
-    </StudentContext.Provider>
-  );
+  return <StudentContext.Provider value={value}>{children}</StudentContext.Provider>;
 }
 
 export const useStudent = () => useContext(StudentContext);

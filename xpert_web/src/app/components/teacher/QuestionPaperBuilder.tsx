@@ -436,6 +436,21 @@ export function QuestionPaperBuilder({ items, onChange, onUploadImage, uploading
 
   const addSection = () => onChange([...items, blankSection()]);
 
+  const updateSection = (section: SectionItem, patch: Partial<SectionItem>) => {
+    const updated = { ...section, ...patch };
+    onChange(items.map((item) => {
+      if (item.id === section.id) return updated;
+      if (item.itemType === 'question' && item.sectionId === section.id) {
+        return {
+          ...item,
+          positive_marks: patch.positive_marks ?? item.positive_marks,
+          negative_marks: patch.negative_marks ?? item.negative_marks,
+        };
+      }
+      return item;
+    }));
+  };
+
   const questions = items.filter((i) => i.itemType === 'question') as QuestionItem[];
 
   return (
@@ -445,7 +460,7 @@ export function QuestionPaperBuilder({ items, onChange, onUploadImage, uploading
           const s = item as SectionItem;
           return (
             <SectionCard key={s.id} s={s}
-              onUpdate={(patch) => updateItem(s.id, patch)}
+              onUpdate={(patch) => updateSection(s, patch)}
               onDelete={() => deleteItem(s.id)} />
           );
         }

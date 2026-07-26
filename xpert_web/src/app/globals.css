@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #e9edef;
+  --foreground: #20272b;
 }
   
 @theme inline {
@@ -17,6 +17,21 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Day mode uses quiet ash surfaces: cards remain distinct without a harsh white canvas. */
+.bg-white { background-color: #f5f6f6 !important; }
+.bg-gray-50 { background-color: #eef0f1 !important; }
+.bg-gray-100 { background-color: #e4e7e8 !important; }
+.bg-gray-200 { background-color: #d8dddf !important; }
+.border-gray-100 { border-color: #e0e4e5 !important; }
+.border-gray-200 { border-color: #d3d8da !important; }
+.border-gray-300 { border-color: #c4cbce !important; }
+.bg-indigo-50 { background-color: #eceef4 !important; }
+.bg-blue-50 { background-color: #eaf0f2 !important; }
+.bg-green-50 { background-color: #edf3ef !important; }
+.bg-amber-50 { background-color: #f4f1e9 !important; }
+.hover\:bg-gray-50:hover { background-color: #e9edef !important; }
+.hover\:bg-gray-100:hover { background-color: #dde2e4 !important; }
 
 html[data-theme="dark"] {
   --background: #0f0f0f;

@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { BookOpen, GraduationCap, Eye, EyeOff } from 'lucide-react';
+import { GraduationCap, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
@@ -38,6 +38,7 @@ export default function SignupPage() {
         data: {
           full_name: formData.full_name,
           role: 'teacher',
+          phone: formData.phone || null,
         },
       },
     });
@@ -48,27 +49,21 @@ export default function SignupPage() {
       return;
     }
 
-    const userId = authData.user.id;
-
-    const { error: profileError } = await supabase.from('users').insert({
-      id: userId,
-      full_name: formData.full_name,
-      role: 'teacher',
-      email: formData.email,
-      phone: formData.phone || null,
-      date_of_birth: '2000-01-01',
-    });
-
-    if (profileError) {
-      toast.error('Profile creation failed: ' + profileError.message);
+    if (!authData.session) {
+      toast.success('Teacher account created. Confirm your email, then sign in.');
       setLoading(false);
+      router.push('/login');
       return;
     }
 
-    await supabase.from('teachers').insert({
-      id: userId,
+    const { error: teacherError } = await supabase.from('teachers').update({
       institution_name: formData.subject ? `Subject: ${formData.subject}` : null,
-    });
+    }).eq('id', authData.user.id);
+    if (teacherError) {
+      toast.error('Account created, but teacher profile setup failed: ' + teacherError.message);
+      setLoading(false);
+      return;
+    }
 
     toast.success('Teacher account created! Redirecting…');
     setLoading(false);
@@ -135,7 +130,7 @@ export default function SignupPage() {
           <Link href="/login" className="text-indigo-600 font-medium hover:text-indigo-700">Sign in</Link>
         </p>
         <p className="text-center text-sm text-gray-500 mt-3">
-          Student? <Link href="/student/join" className="text-green-600 font-medium hover:text-green-700">Join with batch code</Link>
+          Student? <Link href="/student/join" className="text-green-600 font-medium hover:text-green-700">Create a student account</Link>
         </p>
       </div>
     </div>

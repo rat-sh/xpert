@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { ClipboardCheck, FileText, LogOut, Menu, BookOpen, X, UserPlus } from 'lucide-react';
+import { ClipboardCheck, FileText, LogOut, Menu, BookOpen, X } from 'lucide-react';
 import { useStudent } from '@/contexts/StudentContext';
 import { ThemeToggle } from '@/app/components/ui/ThemeToggle';
 
@@ -10,7 +10,6 @@ const tabs = [
   { id: 'dashboard', label: 'Dashboard', icon: BookOpen, href: '/student' },
   { id: 'exams', label: 'Exams', icon: ClipboardCheck, href: '/student/exams' },
   { id: 'results', label: 'Results', icon: FileText, href: '/student/results' },
-  { id: 'join', label: 'Join Batch', icon: UserPlus, href: '/student/join' },
 ];
 
 export default function StudentLayout({ children }: { children: React.ReactNode }) {
@@ -40,9 +39,9 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
 
   if (!student) return null;
 
-  const handleLogout = () => {
-    signOut();
-    router.push('/student/join');
+  const handleLogout = async () => {
+    await signOut();
+    router.push('/login');
   };
 
   const activeTab = tabs.find((t) => pathname === t.href || (t.href !== '/student' && pathname.startsWith(t.href)));
@@ -76,11 +75,11 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
           })}
         </nav>
         <div className="p-4 border-t border-gray-200">
-          <p className="text-sm text-gray-900 font-medium px-2">{student.name}</p>
-          <p className="text-xs text-indigo-600 px-2 mb-3 font-mono">{student.student_code}</p>
+          <p className="text-sm text-gray-900 font-medium px-2">{student.full_name}</p>
+          <p className="text-xs text-gray-500 px-2 mb-3 truncate">{student.email}</p>
           <ThemeToggle />
-          <button onClick={handleLogout} className="mt-1 w-full flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors text-sm">
-            <LogOut className="w-4 h-4" /> Reset Device
+          <button onClick={() => void handleLogout()} className="mt-1 w-full flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors text-sm">
+            <LogOut className="w-4 h-4" /> Sign out
           </button>
         </div>
       </aside>

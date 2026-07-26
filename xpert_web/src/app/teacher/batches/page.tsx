@@ -21,8 +21,8 @@ interface Batch {
 
 interface BatchStudent {
   student_id: string;
-  student_code: string;
   name: string;
+  phone?: string | null;
   joined_at: string;
   batch_id: string;
 }
@@ -86,25 +86,20 @@ export default function BatchesPage() {
         .eq('teacher_id', user.id)
         .order('created_at', { ascending: false });
 
-      const withCounts = await Promise.all(
-        (batchData ?? []).map(async (b: Batch) => {
-          const { data: students } = await supabase.rpc('get_batch_students', { p_batch_id: b.id });
-          return {
-            ...b,
-            studentCount: (students ?? []).length,
-          };
-        })
-      );
-
       const allStudents: BatchStudent[] = [];
       for (const b of batchData ?? []) {
-        const { data: students } = await supabase.rpc('get_batch_students', { p_batch_id: b.id });
-        (students ?? []).forEach((s: { student_id: string; student_code: string; name: string; joined_at: string }) => {
-          allStudents.push({ ...s, batch_id: b.id });
+        const { data: enrollments } = await supabase
+          .from('batch_enrollments')
+          .select('student_id, enrolled_at, users(full_name, phone)')
+          .eq('batch_id', b.id)
+          .eq('is_active', true);
+        (enrollments ?? []).forEach((enrollment) => {
+          const member = Array.isArray(enrollment.users) ? enrollment.users[0] : enrollment.users;
+          allStudents.push({ student_id: enrollment.student_id, name: member?.full_name ?? 'Student', phone: member?.phone ?? null, joined_at: enrollment.enrolled_at, batch_id: b.id });
         });
       }
 
-      setBatches(withCounts);
+      setBatches((batchData ?? []).map((batch) => ({ ...batch, studentCount: allStudents.filter((student) => student.batch_id === batch.id).length })));
       setBatchStudents(allStudents);
       setLoading(false);
     }
@@ -184,7 +179,7 @@ export default function BatchesPage() {
   const handleRemoveStudent = async (studentId: string, batchId: string, studentName: string) => {
     if (!confirm(`Remove ${studentName} from this batch?`)) return;
     const { error } = await supabase
-      .from('batch_students')
+      .from('batch_enrollments')
       .update({ is_active: false })
       .eq('student_id', studentId)
       .eq('batch_id', batchId);
@@ -342,7 +337,7 @@ export default function BatchesPage() {
                         <p className="text-gray-500 text-xs sm:hidden">{batchName}</p>
                       </td>
                       <td className="px-4 py-3 text-gray-600 text-sm hidden sm:table-cell">{batchName}</td>
-                      <td className="px-4 py-3 text-indigo-600 text-sm font-mono hidden md:table-cell">{student.student_code}</td>
+                      <td className="px-4 py-3 text-gray-600 text-sm hidden md:table-cell">{student.phone ?? '—'}</td>
                       <td className="px-4 py-3 text-gray-500 text-xs">
                         {new Date(student.joined_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' })}
                       </td>

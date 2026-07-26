@@ -31,12 +31,7 @@ export default function LoginPage() {
       .eq('id', data.user.id)
       .single();
 
-    if (profile?.role === 'teacher') {
-      router.push('/teacher');
-    } else {
-      toast.error('Student accounts use batch join — no email login required.');
-      router.push('/student/join');
-    }
+    router.push(profile?.role === 'teacher' ? '/teacher' : '/student');
   };
 
   return (
@@ -106,7 +101,7 @@ export default function LoginPage() {
           </Link>
         </p>
         <p className="text-center text-sm text-gray-500 mt-3">
-          Student? <Link href="/student/join" className="text-green-600 font-medium hover:text-green-700">Join with batch code</Link>
+          Student? <Link href="/student/join" className="text-green-600 font-medium hover:text-green-700">Create an account</Link>
         </p>
       </div>
     </div>

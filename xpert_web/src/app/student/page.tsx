@@ -1,25 +1,26 @@
 'use client';
 import Link from 'next/link';
-import { ClipboardCheck, FileText, UserPlus } from 'lucide-react';
+import { ClipboardCheck, FileText } from 'lucide-react';
+import { BatchStatusControl } from '@/app/components/student/BatchStatusControl';
 import { useStudent } from '@/contexts/StudentContext';
 
 const quickLinks = [
   { label: 'My Exams', href: '/student/exams', icon: ClipboardCheck, color: 'bg-green-100 text-green-600', desc: 'Take exams from your batches' },
   { label: 'My Results', href: '/student/results', icon: FileText, color: 'bg-blue-100 text-blue-600', desc: 'View your performance' },
-  { label: 'Join Batch', href: '/student/join', icon: UserPlus, color: 'bg-indigo-100 text-indigo-600', desc: 'Enter a teacher join code' },
 ];
 
 export default function StudentHomePage() {
   const { student } = useStudent();
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-semibold text-gray-900">
-          Hello, {student?.name?.split(' ')[0] ?? 'Student'} 👋
-        </h2>
-        <p className="text-gray-500 text-sm mt-1">
-          Student ID: <span className="font-mono text-indigo-600">{student?.student_code}</span>
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-semibold text-gray-900">
+            Hello, {student?.full_name?.split(' ')[0] ?? 'Student'} 👋
+          </h2>
+          <p className="text-gray-500 text-sm mt-1">Your exams and results, all in one place.</p>
+        </div>
+        <BatchStatusControl />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {quickLinks.map((link) => {
