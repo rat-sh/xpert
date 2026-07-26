@@ -8,6 +8,8 @@ import {
 import { toast } from 'sonner';
 import { supabase, Exam, Question, Batch } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'next/navigation';
+import { QuestionExtractionUpload, type ExtractedQuestion } from '@/app/components/teacher/QuestionExtractionUpload';
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -212,6 +214,7 @@ function RowActionMenu({
 
 export default function QuestionBankPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const [examRows, setExamRows] = useState<ExamBankRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewingExam, setViewingExam] = useState<ExamBankRow | null>(null);
@@ -253,7 +256,10 @@ export default function QuestionBankPage() {
     setLoading(false);
   }, [user]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    const timeout = window.setTimeout(() => { void fetchData(); }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [fetchData]);
 
   /* Filtered rows */
   const filtered = filterExam === 'all'
@@ -307,6 +313,11 @@ export default function QuestionBankPage() {
     fetchData();
   };
 
+  const startImportedExam = (questions: ExtractedQuestion[]) => {
+    sessionStorage.setItem('xpert:pending-question-import', JSON.stringify(questions));
+    router.push('/teacher/exams?import=questions');
+  };
+
   /* ─── View Questions Panel ─────────────────────────────────────────────── */
 
   if (viewingExam) {
@@ -356,10 +367,13 @@ export default function QuestionBankPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center gap-4 flex-wrap">
         <div>
           <h2 className="text-gray-900 text-2xl font-semibold">Question Bank</h2>
           <p className="text-gray-600 text-sm mt-1">Browse exams and their questions — view, edit, duplicate, or delete</p>
+        </div>
+        <div className="w-full lg:w-auto lg:max-w-xl">
+          <QuestionExtractionUpload onExtracted={startImportedExam} />
         </div>
       </div>
 

@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   Plus, BookOpen, Clock, Calendar, ChevronRight, ChevronLeft,
   Check, X, Trash2, Edit2, Copy, Key, Eye, MoreVertical,
@@ -10,9 +11,10 @@ import { toast } from 'sonner';
 import { supabase, Batch, Exam } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-  QuestionPaperBuilder, blankQuestion, questionsToPaperItems, getQuestionsFromItems,
+  QuestionPaperBuilder, blankQuestion, blankSection, questionsToPaperItems, getQuestionsFromItems,
   type PaperItem, type SectionItem,
 } from '@/app/components/teacher/QuestionPaperBuilder';
+import { QuestionExtractionUpload, type ExtractedQuestion } from '@/app/components/teacher/QuestionExtractionUpload';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -48,7 +50,35 @@ const BLANK_DETAILS: ExamDetails = {
   no_reverse_back: false, per_question_time_enabled: false, per_question_time_seconds: 60,
 };
 
-const INITIAL_PAPER: PaperItem[] = [blankQuestion('mcq', null)];
+function createInitialPaper(): PaperItem[] {
+  const section = { ...blankSection(), title: 'Section 1' };
+  return [section, blankQuestion('mcq', section.id, section)];
+}
+
+function paperItemsFromExtracted(questions: ExtractedQuestion[]): PaperItem[] {
+  const items: PaperItem[] = [];
+  let activeSection: SectionItem | null = null;
+  let activeTitle = '';
+
+  for (const question of questions) {
+    const title = question.section_title?.trim() || 'Questions';
+    if (title !== activeTitle) {
+      activeTitle = title;
+      activeSection = { ...blankSection(), title, positive_marks: question.positive_marks, negative_marks: question.negative_marks };
+      items.push(activeSection);
+    }
+    items.push({
+      ...blankQuestion(question.question_type, activeSection?.id ?? null, activeSection),
+      question_text: question.question_text,
+      options: question.question_type === 'mcq' ? question.options.map((text) => ({ text, imageUrl: null })) : [],
+      correct_answer: question.correct_answer,
+      positive_marks: question.positive_marks,
+      negative_marks: question.negative_marks,
+      difficulty: question.difficulty,
+    });
+  }
+  return items.length ? items : createInitialPaper();
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -372,6 +402,7 @@ function UpdateSettingsModal({
 
 export default function TeacherExamsPage() {
   const { user } = useAuth();
+  const searchParams = useSearchParams();
   const [exams, setExams] = useState<ExamRow[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [creating, setCreating] = useState(false);
@@ -379,7 +410,7 @@ export default function TeacherExamsPage() {
   const [step, setStep] = useState<Step>('details');
   const [details, setDetails] = useState<ExamDetails>(BLANK_DETAILS);
   const [savedExamId, setSavedExamId] = useState<string | null>(null);
-  const [paperItems, setPaperItems] = useState<PaperItem[]>(INITIAL_PAPER);
+  const [paperItems, setPaperItems] = useState<PaperItem[]>(createInitialPaper);
   const [savingQuestions, setSavingQuestions] = useState(false);
   const [questionsDirty, setQuestionsDirty] = useState(false);
   const [loadingExams, setLoadingExams] = useState(true);
@@ -482,7 +513,7 @@ export default function TeacherExamsPage() {
   const loadQuestionsForExam = async (examId: string) => {
     const { data } = await supabase.from('questions').select('*').eq('exam_id', examId).order('order_index');
     if (!data || data.length === 0) {
-      setPaperItems(INITIAL_PAPER);
+      setPaperItems(createInitialPaper());
     } else {
       setPaperItems(questionsToPaperItems(data));
     }
@@ -617,7 +648,7 @@ export default function TeacherExamsPage() {
     setEditingExamId(null);
     setSavedExamId(null);
     setStep('details');
-    setPaperItems(INITIAL_PAPER);
+    setPaperItems(createInitialPaper());
     setDetails(BLANK_DETAILS);
     fetchExams();
   };
@@ -721,13 +752,31 @@ export default function TeacherExamsPage() {
 
   const startCreating = () => {
     setDetails(BLANK_DETAILS);
-    setPaperItems(INITIAL_PAPER);
+    setPaperItems(createInitialPaper());
     setSavedExamId(null);
     setEditingExamId(null);
     setStep('details');
     setQuestionsDirty(false);
     setCreating(true);
   };
+
+  useEffect(() => {
+    if (searchParams.get('import') !== 'questions' || typeof window === 'undefined') return;
+    const saved = sessionStorage.getItem('xpert:pending-question-import');
+    if (!saved) return;
+    try {
+      const imported = JSON.parse(saved) as ExtractedQuestion[];
+      if (!Array.isArray(imported) || imported.length === 0) return;
+      sessionStorage.removeItem('xpert:pending-question-import');
+      setDetails(BLANK_DETAILS);
+      setPaperItems(paperItemsFromExtracted(imported));
+      setSavedExamId(null); setEditingExamId(null); setStep('details'); setQuestionsDirty(true); setCreating(true);
+      toast.success('Imported questions are ready. Add exam details, then review them before saving.');
+    } catch {
+      sessionStorage.removeItem('xpert:pending-question-import');
+      toast.error('The imported question draft could not be opened. Please upload the file again.');
+    }
+  }, [searchParams]);
 
   const cancel = () => {
     if (savedExamId && !editingExamId) {
@@ -737,7 +786,7 @@ export default function TeacherExamsPage() {
     setEditingExamId(null);
     setSavedExamId(null);
     setStep('details');
-    setPaperItems(INITIAL_PAPER);
+    setPaperItems(createInitialPaper());
     setDetails(BLANK_DETAILS);
     setQuestionsDirty(false);
   };
@@ -747,6 +796,15 @@ export default function TeacherExamsPage() {
     const url = await uploadImage(file);
     setUploadingImg(false);
     return url;
+  };
+
+  const handleExtractedQuestions = (extracted: ExtractedQuestion[]) => {
+    setPaperItems((current) => {
+      const imported = paperItemsFromExtracted(extracted);
+      const isBlankInitial = current.every((item) => item.itemType === 'section' || !item.question_text);
+      return isBlankInitial ? imported : [...current, ...imported];
+    });
+    setQuestionsDirty(true);
   };
 
   // ─── Create / Edit Mode ────────────────────────────────────────────────────
@@ -913,7 +971,6 @@ export default function TeacherExamsPage() {
                 <div>
                   <h3 className="text-gray-900 font-semibold text-lg">
                     {details.title || 'Question Paper'}
-                    {details.subject && <span className="text-indigo-600 font-normal text-sm ml-2">— {details.subject}</span>}
                   </h3>
                   <p className="text-gray-500 text-sm mt-0.5">Add sections and multiple questions — save when ready</p>
                 </div>
@@ -922,6 +979,9 @@ export default function TeacherExamsPage() {
                 )}
               </div>
               <div className="p-4">
+                <div className="mb-4">
+                  <QuestionExtractionUpload onExtracted={handleExtractedQuestions} />
+                </div>
                 <QuestionPaperBuilder
                   items={paperItems}
                   onChange={handlePaperChange}
@@ -1174,7 +1234,7 @@ export default function TeacherExamsPage() {
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-1">
-              You are about to permanently delete <span className="font-semibold text-gray-900">"{activeExam.title}"</span> and all its questions.
+              You are about to permanently delete <span className="font-semibold text-gray-900">&quot;{activeExam.title}&quot;</span> and all its questions.
             </p>
             {activeExam.hasAttempts && (
               <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">

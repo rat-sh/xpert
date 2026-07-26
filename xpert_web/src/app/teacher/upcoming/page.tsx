@@ -23,10 +23,7 @@ export default function UpcomingExamsPage() {
       if (data) {
         const withCounts = await Promise.all(
           data.map(async (exam) => {
-            const { count } = await supabase
-              .from('batch_enrollments')
-              .select('*', { count: 'exact', head: true })
-              .eq('batch_id', exam.batch_id);
+            const { count } = await supabase.from('batch_enrollments').select('*', { count: 'exact', head: true }).eq('batch_id', exam.batch_id).eq('is_active', true);
             return { ...exam, enrollmentCount: count ?? 0 };
           })
         );
@@ -37,11 +34,13 @@ export default function UpcomingExamsPage() {
     fetch();
   }, [user]);
 
+  const [nowMs] = useState(() => Date.now());
+
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-  const getDaysUntil = (iso: string) => {
-    const diff = new Date(iso).getTime() - Date.now();
+  const getDaysUntil = (iso: string, targetNowMs: number) => {
+    const diff = new Date(iso).getTime() - targetNowMs;
     const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
     return days;
   };
@@ -66,7 +65,7 @@ export default function UpcomingExamsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {exams.map((exam) => {
-            const daysUntil = exam.scheduled_at ? getDaysUntil(exam.scheduled_at) : null;
+            const daysUntil = exam.scheduled_at ? getDaysUntil(exam.scheduled_at, nowMs) : null;
             return (
               <div key={exam.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 hover:shadow-md transition-shadow">
                 <div className="flex items-start justify-between mb-3">

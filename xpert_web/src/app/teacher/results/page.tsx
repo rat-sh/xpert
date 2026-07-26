@@ -29,19 +29,37 @@ export default function TeacherResultsPage() {
       const examIds = (examData ?? []).map((e) => e.id);
       if (examIds.length === 0) { setLoading(false); return; }
 
-      const { data } = await supabase
+      const { data: submissionsData } = await supabase
         .from('exam_submissions')
         .select(`
           *,
           exams(*, batches(*)),
-          users!student_id(full_name, email),
           submission_answers(*, questions(*))
         `)
         .in('exam_id', examIds)
         .not('submitted_at', 'is', null)
         .order('submitted_at', { ascending: false });
 
-      setSubmissions((data as ExamSubmission[]) ?? []);
+      if (submissionsData && submissionsData.length > 0) {
+        const studentIds = Array.from(new Set(submissionsData.map((s) => s.student_id)));
+        const { data: usersData } = await supabase.from('users').select('id, full_name, email').in('id', studentIds);
+        const userMap = new Map((usersData ?? []).map((u) => [u.id, u]));
+
+        const enriched = submissionsData.map((s) => {
+          const userObj = userMap.get(s.student_id);
+          return {
+            ...s,
+            users: {
+              full_name: userObj?.full_name ?? 'Student',
+              email: userObj?.email ?? null,
+            },
+          };
+        });
+
+        setSubmissions(enriched as ExamSubmission[]);
+      } else {
+        setSubmissions([]);
+      }
       setLoading(false);
     };
     fetch();

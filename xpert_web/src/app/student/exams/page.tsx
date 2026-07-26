@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, Clock, Calendar, CheckCircle, AlertCircle, BookOpen, Zap } from 'lucide-react';
+import { Play, Clock, CheckCircle, AlertCircle, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useStudent } from '@/contexts/StudentContext';
@@ -46,22 +46,32 @@ export default function StudentExamsPage() {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const submissionIdRef = useRef<string | null>(null);
-  const lastStartAttemptRef = useRef<number>(0);
 
   const fetchExams = useCallback(async () => {
     if (!student) return;
     setLoading(true);
-    const { data, error } = await supabase.rpc('get_student_exams', { p_student_id: student.id });
+    const { data, error } = await supabase
+      .from('exams')
+      .select('id, title, subject, duration_minutes, total_marks, scheduled_at, is_instant, instant_expires_at, batches(name), exam_submissions(total_score, submitted_at)')
+      .eq('is_published', true)
+      .order('created_at', { ascending: false });
     if (error) {
       toast.error('Could not load exams');
       setLoading(false);
       return;
     }
-    setExams((data ?? []) as StudentExamRow[]);
+    setExams((data ?? []).map((exam) => {
+      const submission = Array.isArray(exam.exam_submissions) ? exam.exam_submissions[0] : null;
+      const batch = Array.isArray(exam.batches) ? exam.batches[0] : exam.batches;
+      return { ...exam, batch_name: batch?.name ?? 'Batch', submitted: Boolean(submission?.submitted_at), total_score: submission?.total_score ?? null };
+    }) as StudentExamRow[]);
     setLoading(false);
   }, [student]);
 
-  useEffect(() => { fetchExams(); }, [fetchExams]);
+  useEffect(() => {
+    const timeout = window.setTimeout(() => { void fetchExams(); }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [fetchExams]);
 
   const getStatus = (exam: StudentExamRow) => {
     if (exam.submitted) return 'completed';
@@ -77,19 +87,8 @@ export default function StudentExamsPage() {
   const startExam = async (exam: StudentExamRow) => {
     if (!student) return;
 
-    const now = Date.now();
-    if (now - lastStartAttemptRef.current < 26000) {
-      const wait = Math.ceil((26000 - (now - lastStartAttemptRef.current)) / 1000);
-      toast.error(`For security purposes, please wait ${wait} seconds before trying again.`);
-      return;
-    }
-    lastStartAttemptRef.current = now;
-
     setStarting(true);
-    const { data: qData, error: qErr } = await supabase.rpc('get_exam_questions_for_student', {
-      p_exam_id: exam.id,
-      p_student_id: student.id,
-    });
+    const { data: qData, error: qErr } = await supabase.from('student_questions_view').select('*').eq('exam_id', exam.id).order('order_index');
     if (qErr || !qData?.length) {
       toast.error(qErr?.message ?? 'This exam has no questions yet.');
       setStarting(false);
@@ -101,10 +100,7 @@ export default function StudentExamsPage() {
       options: Array.isArray(q.options) ? q.options : (q.options ? JSON.parse(q.options as unknown as string) : null),
     }));
 
-    const { data: startData, error: startErr } = await supabase.rpc('start_exam_as_student', {
-      p_exam_id: exam.id,
-      p_student_id: student.id,
-    });
+    const { data: startData, error: startErr } = await supabase.rpc('start_exam', { p_exam_id: exam.id });
 
     if (startErr || !startData?.[0]) {
       toast.error(startErr?.message ?? 'Could not start exam');
@@ -116,6 +112,7 @@ export default function StudentExamsPage() {
     submissionIdRef.current = sub.submission_id;
 
     const endMs = new Date(sub.server_end_time).getTime();
+    // eslint-disable-next-line react-hooks/purity -- this interaction handler sets the timer boundary.
     const remaining = Math.max(0, Math.floor((endMs - Date.now()) / 1000));
 
     setCurrentExam(exam);
@@ -147,9 +144,8 @@ export default function StudentExamsPage() {
       student_answer: ans[q.id] ?? '',
     }));
 
-    const { data: score, error } = await supabase.rpc('submit_exam_as_student', {
+    const { data: score, error } = await supabase.rpc('submit_exam', {
       p_submission_id: submissionId,
-      p_student_id: student.id,
       p_answers: answerPayload,
     });
 
@@ -158,7 +154,8 @@ export default function StudentExamsPage() {
       return;
     }
 
-    toast.success(`Exam submitted! You scored ${score ?? 0}/${exam.total_marks}`);
+    const result = Array.isArray(score) ? score[0] : score;
+    toast.success(`Exam submitted! You scored ${result?.total_score ?? 0}/${exam.total_marks}`);
     setView('list');
     setCurrentExam(null);
     setQuestions([]);
