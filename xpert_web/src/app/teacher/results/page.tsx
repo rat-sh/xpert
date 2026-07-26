@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Search, Download, Eye, X, CheckCircle, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase, ExamSubmission } from '@/lib/supabase';
@@ -16,9 +16,8 @@ export default function TeacherResultsPage() {
   const [selectedResult, setSelectedResult] = useState<ExamSubmission | null>(null);
   const [exams, setExams] = useState<{ id: string; title: string }[]>([]);
 
-  useEffect(() => {
+  const fetchResults = useCallback(async () => {
     if (!user) return;
-    const fetch = async () => {
       // get all exams belonging to this teacher
       const { data: examData } = await supabase
         .from('exams')
@@ -27,7 +26,7 @@ export default function TeacherResultsPage() {
 
       setExams(examData ?? []);
       const examIds = (examData ?? []).map((e) => e.id);
-      if (examIds.length === 0) { setLoading(false); return; }
+      if (examIds.length === 0) { setSubmissions([]); setLoading(false); return; }
 
       const { data: submissionsData } = await supabase
         .from('exam_submissions')
@@ -61,9 +60,13 @@ export default function TeacherResultsPage() {
         setSubmissions([]);
       }
       setLoading(false);
-    };
-    fetch();
   }, [user]);
+
+  useEffect(() => {
+    const initialFetch = window.setTimeout(() => { void fetchResults(); }, 0);
+    const interval = window.setInterval(() => { void fetchResults(); }, 15_000);
+    return () => { window.clearTimeout(initialFetch); window.clearInterval(interval); };
+  }, [fetchResults]);
 
   const filtered = submissions.filter((s) => {
     const name = (s.users as unknown as { full_name: string })?.full_name ?? '';

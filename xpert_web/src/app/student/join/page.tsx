@@ -19,7 +19,10 @@ export default function StudentJoinPage() {
     setSaving(true);
     const { data, error } = await supabase.auth.signUp({
       email: form.email.trim(), password: form.password,
-      options: { data: { full_name: form.fullName.trim(), role: 'student' } },
+      options: { 
+        emailRedirectTo: `${window.location.origin}/login`,
+        data: { full_name: form.fullName.trim(), role: 'student' } 
+      },
     });
     setSaving(false);
     if (error || !data.user) { toast.error(error?.message ?? 'Could not create student account.'); return; }
